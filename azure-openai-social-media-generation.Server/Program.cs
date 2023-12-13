@@ -20,7 +20,6 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 builder.Services.AddAzureClients(clientBuilder =>
 {
-    clientBuilder.AddBlobServiceClient(builder.Configuration.GetConnectionString("BlobStorageConnectionString"));
     string? openaiEndpoint = builder.Configuration.GetValue<String>("OpenAiEndpoint");
     string? openaiKey = builder.Configuration.GetValue<String>("OpenAiKey");
     if (openaiEndpoint == null || openaiKey == null)
@@ -28,6 +27,7 @@ builder.Services.AddAzureClients(clientBuilder =>
         throw new InvalidOperationException("OpenAI not configured");
     }
     clientBuilder.AddOpenAIClient(new Uri(openaiEndpoint), new Azure.AzureKeyCredential(openaiKey));
+    clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("BlobStorageConnectionString"));
 });
 builder.Services.AddHttpClient<IImagePrepService, ImagePrepService>();
 
