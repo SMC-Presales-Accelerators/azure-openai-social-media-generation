@@ -53,7 +53,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.MapPost("getcolortheme", async (ImageUri image, IImagePrepService imagePrepService, OpenAIClient openai) =>
+app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService imagePrepService, OpenAIClient openai) =>
 {
     List<string> response = await imagePrepService.GetColorThemeAsync(image.ForegroundImageUri);
 
@@ -99,7 +99,7 @@ app.MapPost("getcolortheme", async (ImageUri image, IImagePrepService imagePrepS
 .WithName("GetColorTheme")
 .WithOpenApi();
 
-app.MapPost("getbackgrounddescription", async (CopyAndColors copyandcolors, OpenAIClient openai) =>
+app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndColors copyandcolors, OpenAIClient openai) =>
 {
     string? deploymentName = app.Configuration.GetValue<String>("OpenAIDeploymentName");
     if (deploymentName == null)
@@ -128,7 +128,7 @@ You will be provided a list of colors, provide the description of a simple backg
 .WithName("GetBackgroundDescription")
 .WithOpenApi();
 
-app.MapPost("generatebackgrounds", async (BackgroundDescription description, OpenAIClient openai) =>
+app.MapPost($"{basePath}generatebackgrounds", async (BackgroundDescription description, OpenAIClient openai) =>
 {
     var ImageGenOptions = new ImageGenerationOptions()
     {
@@ -143,7 +143,7 @@ app.MapPost("generatebackgrounds", async (BackgroundDescription description, Ope
 .WithName("GenerateBackgrounds")
 .WithOpenApi();
 
-app.MapPost("removebackgroundandcrop", async (ImageUri image, IImagePrepService imagePrepService) =>
+app.MapPost($"{basePath}removebackgroundandcrop", async (ImageUri image, IImagePrepService imagePrepService) =>
 {
     var response = await imagePrepService.CropAndRemoveBackgroundAsync(image.ForegroundImageUri);
     return new { BackgroundRemovedUrl = response };
@@ -151,7 +151,7 @@ app.MapPost("removebackgroundandcrop", async (ImageUri image, IImagePrepService 
 .WithName("RemoveBackgroundAndCrop")
 .WithOpenApi();
 
-app.MapPost("combineimages", async (SocialImage images, IImagePrepService imagePrepService) =>
+app.MapPost($"{basePath}combineimages", async (SocialImage images, IImagePrepService imagePrepService) =>
 {
     var response = await imagePrepService.CombineImagesAsync(images.ForegroundImage, images.BackgroundImages);
     return new { CombinedImageUrls = response };
@@ -159,7 +159,7 @@ app.MapPost("combineimages", async (SocialImage images, IImagePrepService imageP
 .WithName("CombineImages")
 .WithOpenApi();
 
-app.MapPost("createcopy", async (MarketingInfo info, OpenAIClient openai) =>
+app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient openai) =>
 {
     string? deploymentName = app.Configuration.GetValue<String>("OpenAIDeploymentName");
     if (deploymentName == null)
@@ -203,7 +203,7 @@ app.MapPost("createcopy", async (MarketingInfo info, OpenAIClient openai) =>
 .WithName("CreateSocialCopy")
 .WithOpenApi();
 
-app.MapGet("prepareblob", (string filename, BlobServiceClient blob) =>
+app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =>
 {
     string extension = Path.GetExtension(filename);
     string uniqueFileName = Guid.NewGuid().ToString("N") + extension;
