@@ -9,7 +9,7 @@ function App() {
         <>
             <Navbar bg="dark" data-bs-theme="dark">
                 <Navbar.Brand className="me-auto m-1">Social Media Generator</Navbar.Brand>
-                <Navbar.Text className="mx-auto">Github</Navbar.Text>
+                <Navbar.Brand href="https://github.com/cbattlegear/azure-openai-social-media-generation" className="mx-auto">Github</Navbar.Brand>
                 <Navbar.Text className="ms-auto m-1">Azure OpenAI</Navbar.Text>
             </Navbar>
             <Container>
