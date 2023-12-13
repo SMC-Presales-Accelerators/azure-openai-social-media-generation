@@ -33,6 +33,14 @@ builder.Services.AddHttpClient<IImagePrepService, ImagePrepService>();
 
 var app = builder.Build();
 
+string? basePath = "/";
+if (app.Configuration.GetValue<String>("BasePath") != null)
+{
+    basePath = app.Configuration.GetValue<String>("BasePath");
+}
+
+app.UsePathBase(basePath);
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
