@@ -3,15 +3,11 @@ using SixLabors.ImageSharp.Processing;
 using Azure;
 using Azure.AI.Vision.ImageAnalysis;
 using Azure.AI.Vision.Common;
-using Microsoft.Azure.CognitiveServices.Vision.ComputerVision;
-using Microsoft.Azure.CognitiveServices.Vision.ComputerVision.Models;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using SixLabors.ImageSharp.PixelFormats;
-using static System.Net.Mime.MediaTypeNames;
 using Newtonsoft.Json;
-using System.Net;
 using System.Text;
 
 namespace azure_openai_social_media_generation.Server
@@ -46,13 +42,13 @@ namespace azure_openai_social_media_generation.Server
 
         public ImagePrepService(IConfiguration configuration, HttpClient httpClient, BlobServiceClient blob)
         {
-            string? key = configuration.GetValue<string>("VisionServiceKey");
-            string? endpoint = configuration.GetValue<string>("VisionServiceEndpoint");
+            string? key = configuration.GetValue<string>("VISION_SERVICE_KEY");
+            string? endpoint = configuration.GetValue<string>("VISION_SERVICE_ENDPOINT");
             if (key == null || endpoint == null)
             {
                 throw new ArgumentNullException("Vision Service not configured");
             }
-            string? uploadContainer = configuration.GetValue<String>("BlobUploadContainer");
+            string? uploadContainer = configuration.GetValue<String>("AZURE_BLOB_UPLOAD_CONTAINER");
             if (uploadContainer == null)
             {
                 throw new ArgumentNullException("Blob Container not configured");

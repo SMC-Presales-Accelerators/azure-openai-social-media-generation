@@ -20,23 +20,23 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddProblemDetails();
 builder.Services.AddAzureClients(clientBuilder =>
 {
-    string? openaiEndpoint = builder.Configuration.GetValue<String>("OpenAiEndpoint");
-    string? openaiKey = builder.Configuration.GetValue<String>("OpenAiKey");
+    string? openaiEndpoint = builder.Configuration.GetValue<String>("AZURE_OPENAI_ENDPOINT");
+    string? openaiKey = builder.Configuration.GetValue<String>("AZURE_OPENAI_API_KEY");
     if (openaiEndpoint == null || openaiKey == null)
     {
         throw new InvalidOperationException("OpenAI not configured");
     }
     clientBuilder.AddOpenAIClient(new Uri(openaiEndpoint), new Azure.AzureKeyCredential(openaiKey));
-    clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("BlobStorageConnectionString"));
+    clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_CONNECTION_STRING"));
 });
 builder.Services.AddHttpClient<IImagePrepService, ImagePrepService>();
 
 var app = builder.Build();
 
 string? basePath = "/";
-if (app.Configuration.GetValue<String>("SocialGeneratorBasePath") != null)
+if (app.Configuration.GetValue<String>("SOCIAL_GENERATOR_BASE_PATH") != null)
 {
-    basePath = app.Configuration.GetValue<String>("SocialGeneratorBasePath");
+    basePath = app.Configuration.GetValue<String>("SOCIAL_GENERATOR_BASE_PATH");
 }
 
 app.UsePathBase(basePath);
@@ -57,7 +57,7 @@ app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService
 {
     List<string> response = await imagePrepService.GetColorThemeAsync(image.ForegroundImageUri);
 
-    string? deploymentName = app.Configuration.GetValue<String>("OpenAIDeploymentName");
+    string? deploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_CHATGPT_DEPLOYMENT");
     if (deploymentName == null)
     {
         throw new InvalidOperationException("OpenAI Endpoint not configured");
@@ -83,7 +83,9 @@ app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService
         JsonNode? json = JsonNode.Parse(completions.Choices[0].Message.Content);
         if (json != null && json["ColorName"] != null)
         {
+#pragma warning disable CS8602 // Dereference of a possibly null reference. Can't be null because of if statement
             accentColor = json["ColorName"].ToString();
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
         }
         
     }
@@ -101,7 +103,7 @@ app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService
 
 app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndColors copyandcolors, OpenAIClient openai) =>
 {
-    string? deploymentName = app.Configuration.GetValue<String>("OpenAIDeploymentName");
+    string? deploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_CHATGPT_DEPLOYMENT");
     if (deploymentName == null)
     {
         throw new InvalidOperationException("OpenAI Endpoint not configured");
@@ -161,7 +163,7 @@ app.MapPost($"{basePath}combineimages", async (SocialImage images, IImagePrepSer
 
 app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient openai) =>
 {
-    string? deploymentName = app.Configuration.GetValue<String>("OpenAIDeploymentName");
+    string? deploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_CHATGPT_DEPLOYMENT");
     if (deploymentName == null)
     {
         throw new InvalidOperationException("OpenAI Endpoint not configured");
@@ -197,7 +199,7 @@ app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient ope
         Temperature = (float?)0.7
     };
     ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
-    return new { Copy = completions.Choices[0].Message.Content };
+    return new { Copy = completions.Choices[0].Message.Content.ReplaceLineEndings("<br />") };
 
 })
 .WithName("CreateSocialCopy")
@@ -208,7 +210,7 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
     string extension = Path.GetExtension(filename);
     string uniqueFileName = Guid.NewGuid().ToString("N") + extension;
 
-    string? uploadContainer = app.Configuration.GetValue<String>("BlobUploadContainer");
+    string? uploadContainer = app.Configuration.GetValue<String>("AZURE_BLOB_UPLOAD_CONTAINER");
     if (uploadContainer != null)
     {
         var blobClient = blob.GetBlobContainerClient(uploadContainer).GetBlobClient(uniqueFileName);
