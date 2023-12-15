@@ -34,14 +34,16 @@
     "Docker": {
       "commandName": "Docker",
       "launchBrowser": true,
-      "launchUrl": "https://localhost:44329/swagger",
+      "launchUrl": "https://localhost:5443/swagger",
       "environmentVariables": {
-        "ASPNETCORE_URLS": "https://+:443;http://+:80",
+        "ASPNETCORE_URLS": "https://+:5443;http://+:5080",
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPNETCORE_HOSTINGSTARTUPASSEMBLIES": "Microsoft.AspNetCore.SpaProxy"
       },
       "publishAllPorts": false,
-      "useSSL": true
+      "useSSL": true,
+      "httpPort": 5080,
+      "sslPort":  5443
     }
   },
   "$schema": "https://json.schemastore.org/launchsettings.json",
