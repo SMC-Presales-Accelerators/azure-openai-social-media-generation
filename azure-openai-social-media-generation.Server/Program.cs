@@ -199,7 +199,7 @@ app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient ope
         Temperature = (float?)0.7
     };
     ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
-    return new { Copy = completions.Choices[0].Message.Content.ReplaceLineEndings("<br />") };
+    return new { Copy = completions.Choices[0].Message.Content };
 
 })
 .WithName("CreateSocialCopy")

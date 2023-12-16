@@ -36,7 +36,7 @@ function GeneratedSocialMediaPost({ post }) {
                     <Card border="secondary" style={{ width: '26rem' }} className="mx-auto">
                         <Card.Img variant="top" src={selectedImage} />
                         <Card.Body>
-                            <Card.Text>
+                            <Card.Text className="white-space">
                                 {post.post}
                             </Card.Text>
                         </Card.Body>
