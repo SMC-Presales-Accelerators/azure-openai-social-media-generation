@@ -5,15 +5,18 @@
     "_generator": {
       "name": "bicep",
       "version": "0.24.24.22086",
-      "templateHash": "7711848357628942171"
+      "templateHash": "4284960232875754690"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
-      "defaultValue": "[resourceGroup().location]",
+      "allowedValues": [
+        "eastus",
+        "westus"
+      ],
       "metadata": {
-        "description": "Specifies the location in which the Azure Storage resources should be deployed."
+        "description": "Specifies the location in which the Azure Storage resources should be deployed, this is limited to East US or West US for current Computer Vision support"
       }
     },
     "website_name": {
