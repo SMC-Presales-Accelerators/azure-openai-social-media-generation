@@ -1,0 +1,282 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.24.24.22086",
+      "templateHash": "7711848357628942171"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Specifies the location in which the Azure Storage resources should be deployed."
+      }
+    },
+    "website_name": {
+      "type": "string",
+      "metadata": {
+        "description": "Name for the app service, this will be the beginning of the FQDN."
+      }
+    },
+    "openai_account_name": {
+      "type": "string",
+      "defaultValue": "[uniqueString(parameters('website_name'), 'openai')]",
+      "metadata": {
+        "description": "Account name for the OpenAI deployment"
+      }
+    },
+    "openai_deployment_name": {
+      "type": "string",
+      "defaultValue": "gpt35",
+      "metadata": {
+        "description": "OpenAI Deployment name for the model deployment."
+      }
+    },
+    "storage_account_name": {
+      "type": "string",
+      "defaultValue": "[uniqueString(parameters('website_name'), 'storage')]",
+      "metadata": {
+        "description": "Storage account name for image uploads and retention."
+      }
+    },
+    "vision_account_name": {
+      "type": "string",
+      "defaultValue": "[uniqueString(parameters('website_name'), 'vision')]",
+      "metadata": {
+        "description": "Computer Vision service name."
+      }
+    },
+    "upload_container_name": {
+      "type": "string",
+      "defaultValue": "uploads",
+      "metadata": {
+        "description": "Container that all photos will be uploaded to."
+      }
+    }
+  },
+  "variables": {
+    "app_service_plan_name": "[uniqueString(parameters('website_name'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}/{2}', parameters('storage_account_name'), 'default', parameters('upload_container_name'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', parameters('storage_account_name'), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2022-09-01",
+      "name": "[format('{0}/{1}', parameters('storage_account_name'), 'default')]",
+      "properties": {
+        "cors": {
+          "corsRules": [
+            {
+              "allowedOrigins": [
+                "[format('https://{0}.azurewebsites.net', parameters('website_name'))]"
+              ],
+              "allowedMethods": [
+                "GET",
+                "HEAD",
+                "MERGE",
+                "POST",
+                "OPTIONS",
+                "PUT",
+                "PATCH"
+              ],
+              "maxAgeInSeconds": 200,
+              "exposedHeaders": [
+                "*"
+              ],
+              "allowedHeaders": [
+                "*"
+              ]
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storage_account_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2023-10-01-preview",
+      "name": "[parameters('openai_account_name')]",
+      "kind": "OpenAI",
+      "location": "[parameters('location')]",
+      "properties": {
+        "customSubDomainName": "[parameters('openai_account_name')]",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "ipRules": [],
+          "virtualNetworkRules": []
+        },
+        "publicNetworkAccess": "Enabled"
+      },
+      "sku": {
+        "name": "S0"
+      }
+    },
+    {
+      "type": "Microsoft.CognitiveServices/accounts/deployments",
+      "apiVersion": "2023-10-01-preview",
+      "name": "[format('{0}/{1}', parameters('openai_account_name'), parameters('openai_deployment_name'))]",
+      "properties": {
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-35-turbo",
+          "version": "0301"
+        }
+      },
+      "sku": {
+        "capacity": 30,
+        "name": "Standard"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('openai_account_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2023-10-01-preview",
+      "name": "[parameters('vision_account_name')]",
+      "identity": {
+        "type": "None"
+      },
+      "kind": "ComputerVision",
+      "location": "[parameters('location')]",
+      "properties": {
+        "customSubDomainName": "[parameters('vision_account_name')]",
+        "networkAcls": {
+          "defaultAction": "Allow",
+          "ipRules": [],
+          "virtualNetworkRules": []
+        },
+        "publicNetworkAccess": "Enabled"
+      },
+      "sku": {
+        "name": "S1"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-09-01",
+      "name": "[parameters('storage_account_name')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "kind": "StorageV2",
+      "properties": {
+        "accessTier": "Hot"
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+      "apiVersion": "2021-02-01",
+      "name": "[format('{0}/{1}', parameters('storage_account_name'), 'default')]",
+      "properties": {
+        "policy": {
+          "rules": [
+            {
+              "enabled": true,
+              "name": "[format('{0}dailydelete', parameters('upload_container_name'))]",
+              "type": "Lifecycle",
+              "definition": {
+                "actions": {
+                  "baseBlob": {
+                    "delete": {
+                      "daysAfterModificationGreaterThan": 1
+                    }
+                  }
+                },
+                "filters": {
+                  "blobTypes": [
+                    "blockBlob"
+                  ],
+                  "prefixMatch": [
+                    "[parameters('upload_container_name')]"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storage_account_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2022-09-01",
+      "name": "[variables('app_service_plan_name')]",
+      "kind": "linux",
+      "location": "[parameters('location')]",
+      "properties": {
+        "elasticScaleEnabled": false,
+        "hyperV": false,
+        "isSpot": false,
+        "isXenon": false,
+        "maximumElasticWorkerCount": 1,
+        "perSiteScaling": false,
+        "reserved": true,
+        "targetWorkerCount": 0,
+        "targetWorkerSizeId": 0,
+        "zoneRedundant": false
+      },
+      "sku": {
+        "capacity": 1,
+        "family": "Pv3",
+        "name": "P0v3",
+        "size": "P0v3",
+        "tier": "Premium0V3"
+      }
+    },
+    {
+      "type": "Microsoft.Web/sites",
+      "apiVersion": "2020-06-01",
+      "name": "[parameters('website_name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('app_service_plan_name'))]",
+        "siteConfig": {
+          "linuxFxVersion": "DOCKER|ghcr.io/cbattlegear/azure-openai-social-media-generation:latest"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', variables('app_service_plan_name'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/sites/config",
+      "apiVersion": "2020-06-01",
+      "name": "[format('{0}/{1}', parameters('website_name'), 'appsettings')]",
+      "properties": {
+        "ASPNETCORE_URLS": "http://*:5080",
+        "AZURE_BLOB_STORAGE_CONNECTION_STRING": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', parameters('storage_account_name'), listKeys(resourceId('Microsoft.Storage/storageAccounts', parameters('storage_account_name')), '2022-09-01').keys[0].value, environment().suffixes.storage)]",
+        "AZURE_BLOB_UPLOAD_CONTAINER": "[parameters('upload_container_name')]",
+        "AZURE_OPENAI_API_KEY": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', parameters('openai_account_name')), '2023-10-01-preview').key1]",
+        "AZURE_OPENAI_CHATGPT_DEPLOYMENT": "[parameters('openai_deployment_name')]",
+        "AZURE_OPENAI_ENDPOINT": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('openai_account_name')), '2023-10-01-preview').endpoint]",
+        "DOCKER_REGISTRY_SERVER_URL": "https://ghcr.io",
+        "VISION_SERVICE_ENDPOINT": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('vision_account_name')), '2023-10-01-preview').endpoint]",
+        "VISION_SERVICE_KEY": "[listKeys(resourceId('Microsoft.CognitiveServices/accounts', parameters('vision_account_name')), '2023-10-01-preview').key1]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/sites', parameters('website_name'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('openai_account_name'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts/deployments', parameters('openai_account_name'), parameters('openai_deployment_name'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', parameters('storage_account_name'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('vision_account_name'))]"
+      ]
+    }
+  ]
+}
