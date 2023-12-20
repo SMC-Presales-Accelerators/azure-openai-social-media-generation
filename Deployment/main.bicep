@@ -1,5 +1,11 @@
-@description('Specifies the location in which the Azure Storage resources should be deployed.')
-param location string = resourceGroup().location
+@description('Specifies the location in which the Azure Storage resources should be deployed, this is limited to East US or West US for current Computer Vision support')
+@allowed(
+  [
+    'eastus'
+    'westus'
+  ]
+)
+param location string
 
 @description('Name for the app service, this will be the beginning of the FQDN.')
 param website_name string
