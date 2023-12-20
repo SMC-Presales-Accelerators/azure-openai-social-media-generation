@@ -27,11 +27,11 @@ jobs:
       - name: Run Bicep build
         run: |
           bicep build Deployment/main.bicep
-          ls -l deploy/*.json
+          ls -l Deployment/*.json
           
       - uses: EndBug/add-and-commit@v9
         with:
           author_name: github-actions
           author_email: '41898282+github-actions[bot]@users.noreply.github.com'
           message: Update Bicep Generated ARM Template
-          add: Deployment/azuredeploy.json
+          add: Deployment/main.json
