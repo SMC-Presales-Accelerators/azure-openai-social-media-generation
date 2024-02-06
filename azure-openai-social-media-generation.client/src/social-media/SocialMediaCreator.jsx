@@ -43,10 +43,13 @@ const SocialMediaCreator = () => {
     }
 
     async function PrepareImages(marketCopy, uploadedImage) {
-        return Promise.all(
-            [CreateBackgroundImage(marketCopy, uploadedImage),
-            CreateForegroundImage(uploadedImage)]
-        );
+        return CreateForegroundImage(uploadedImage)
+            .then(function (foregroundImage) {
+                return Promise.all(
+                    [CreateBackgroundImage(marketCopy, foregroundImage),
+                        foregroundImage]
+                )
+            });
     }
 
     async function CombineImages(backgroundImages, foregroundImage) {
@@ -56,7 +59,6 @@ const SocialMediaCreator = () => {
     async function CreatePost(marketCopy, uploadedImage, postType) {
         return PrepareImages(marketCopy, uploadedImage)
             .then(function ([backgrounds, foregroundImage]) {
-                console.log(backgrounds.backgroundUrls);
                 setBackgrounds(backgrounds.backgroundUrls);
                 setForegroundImage(foregroundImage.backgroundRemovedUrl);
                 return Promise.all(
@@ -78,8 +80,6 @@ const SocialMediaCreator = () => {
 
         CreatePost(marketCopy, uploadedImage, postType)
             .then(([images, copy]) => {
-                console.log(copy.copy);
-                console.log(images.combinedImageUrls);
                 setPost({
                     post: copy.copy,
                     imageUrls: images.combinedImageUrls
