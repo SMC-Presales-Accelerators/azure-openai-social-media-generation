@@ -42,29 +42,22 @@ const SocialMediaCreator = () => {
         return removeBackgroundAndCrop(uploadedImage);
     }
 
-    async function PrepareImages(marketCopy, uploadedImage) {
-        return CreateForegroundImage(uploadedImage)
-            .then(function (foregroundImage) {
-                return Promise.all(
-                    [CreateBackgroundImage(marketCopy, foregroundImage),
-                        foregroundImage]
-                )
-            });
-    }
-
     async function CombineImages(backgroundImages, foregroundImage) {
         return combineImages(backgroundImages, foregroundImage);
     }
 
     async function CreatePost(marketCopy, uploadedImage, postType) {
-        return PrepareImages(marketCopy, uploadedImage)
-            .then(function ([backgrounds, foregroundImage]) {
-                setBackgrounds(backgrounds.backgroundUrls);
+        return CreateForegroundImage(uploadedImage)
+            .then(function (foregroundImage) {
                 setForegroundImage(foregroundImage.backgroundRemovedUrl);
-                return Promise.all(
-                    [CombineImages(backgrounds.backgroundUrls, foregroundImage.backgroundRemovedUrl),
-                    generateSocialMediaPost(marketCopy, postType)]
-                )
+                return CreateBackgroundImage(marketCopy, foregroundImage.backgroundRemovedUrl)
+                    .then(function (backgrounds) {
+                        setBackgrounds(backgrounds.backgroundUrls);
+                        return Promise.all(
+                            [CombineImages(backgrounds.backgroundUrls, foregroundImage.backgroundRemovedUrl),
+                            generateSocialMediaPost(marketCopy, postType)]
+                        )
+                    });
             });
     }
 
@@ -124,13 +117,14 @@ const SocialMediaCreator = () => {
                     />Generating Post</span> : "Generate Post"}</Button>
                 </div>
             </Form>
+            {foregroundImage != "" && <Container><Row><h4>Foreground image with background removed</h4></Row><Row><Col xs={4}><Image src={foregroundImage} thumbnail /></Col></Row></Container>}
+
             {dominantColors != "" &&
                 <Container><Row><h4>Uploaded Image Color Theme</h4></Row><Row><p>{dominantColors}</p></Row></Container>}
             {backgroundDescription != "" &&
                 <Container><Row><h4>Provided Background Description used for Generation</h4></Row><Row><p>{backgroundDescription}</p></Row></Container>}
             {(backgrounds != undefined && backgrounds.length > 0) &&
                 <Container><Row><h4>Generated Backgrounds</h4></Row><ThumbnailList imageList={backgrounds} key={1} /></Container>}
-            {foregroundImage != "" && <Container><Row><h4>Foreground image with background removed</h4></Row><Row><Col xs={4}><Image src={foregroundImage} thumbnail /></Col></Row></Container>}
 
             {readyToDisplay &&
                 <Container>

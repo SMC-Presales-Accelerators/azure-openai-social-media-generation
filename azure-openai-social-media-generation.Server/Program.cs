@@ -10,6 +10,7 @@ using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,11 +23,23 @@ builder.Services.AddAzureClients(clientBuilder =>
 {
     string? openaiEndpoint = builder.Configuration.GetValue<String>("AZURE_OPENAI_ENDPOINT");
     string? openaiKey = builder.Configuration.GetValue<String>("AZURE_OPENAI_API_KEY");
+
     if (openaiEndpoint == null || openaiKey == null)
     {
         throw new InvalidOperationException("OpenAI not configured");
     }
+
+    string? openaiDalleEndpoint = builder.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_ENDPOINT");
+    string? openaiDalleKey = builder.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_API_KEY");
+
+    if (openaiDalleEndpoint == null || openaiDalleKey == null)
+    {
+        throw new InvalidOperationException("OpenAI Image Generation Endpoint not configured");
+    }
+
     clientBuilder.AddOpenAIClient(new Uri(openaiEndpoint), new Azure.AzureKeyCredential(openaiKey));
+    clientBuilder.AddOpenAIClient(new Uri(openaiDalleEndpoint), new Azure.AzureKeyCredential(openaiDalleKey)).WithName("OpenAiDalle");
+
     clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_CONNECTION_STRING"));
 });
 builder.Services.AddHttpClient<IImagePrepService, ImagePrepService>();
@@ -52,6 +65,17 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+#pragma warning disable CS8604 //  Can't be null because of instantiation above
+Uri dalleUri = new Uri(app.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_ENDPOINT"));
+IPHostEntry DalleEndpointCname = await Dns.GetHostEntryAsync(dalleUri.Host);
+// Currently Dalle is only available in East US, verify we are in eastus 
+// by checking the second part of the hostname which will designate the region
+if (DalleEndpointCname.HostName.Split(".")[1] != "eastus")
+{
+    throw new InvalidOperationException("OpenAI DALL-E Endpoint must be in East US");
+}
+#pragma warning restore CS8604 // Possible null reference argument
 
 app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService imagePrepService, OpenAIClient openai) =>
 {
@@ -109,7 +133,7 @@ app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndColors copyandc
         throw new InvalidOperationException("OpenAI Endpoint not configured");
     }
     string instructionsPrompt = @"You are an AI Assistant that creates short, simple image descriptions for AI image generation. 
-You will be provided a list of colors, provide the description of a simple background using opposite colors. Provide no explanation as to why choices were made.";
+You will be provided a list of colors, provide the description of a simple background using complementary colors. Provide no explanation as to why choices were made.";
 //You will be provided marketing copy and a list of colors. Your job is to provide a description of a gradient background 
 //that uses complementary colors and fits the emotion of the copy to be used for diffusion based generation. Provide only the description of the background.";
 
@@ -130,14 +154,15 @@ You will be provided a list of colors, provide the description of a simple backg
 .WithName("GetBackgroundDescription")
 .WithOpenApi();
 
-app.MapPost($"{basePath}generatebackgrounds", async (BackgroundDescription description, OpenAIClient openai) =>
+app.MapPost($"{basePath}generatebackgrounds", async (BackgroundDescription description, IAzureClientFactory<OpenAIClient> openAiClientFactory) =>
 {
-    var ImageGenOptions = new ImageGenerationOptions()
+    var _openai = openAiClientFactory.CreateClient("OpenAiDalle");
+   var ImageGenOptions = new ImageGenerationOptions()
     {
         ImageCount = 4,
         Prompt = "Simple image background: " + description.Description
     };
-    ImageGenerations images = await openai.GetImageGenerationsAsync(ImageGenOptions);
+    ImageGenerations images = await _openai.GetImageGenerationsAsync(ImageGenOptions);
 
     List<Uri> imageUrls = images.Data.Select(image => image.Url).ToList();
     return new { BackgroundUrls = imageUrls };
@@ -225,7 +250,8 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
                 Resource = "b"
             };
 
-            sasBuilder.ExpiresOn = DateTimeOffset.UtcNow.AddDays(1);
+            sasBuilder.ExpiresOn = DateTimeOffset.UtcNow.AddDays(2);
+            sasBuilder.StartsOn = DateTimeOffset.UtcNow.AddDays(-1);
             sasBuilder.SetPermissions(BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create);
 
             return new { SasUri = blobClient.GenerateSasUri(sasBuilder) };

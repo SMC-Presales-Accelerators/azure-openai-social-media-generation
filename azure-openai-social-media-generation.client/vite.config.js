@@ -48,31 +48,31 @@ export default defineConfig({
     server: {
         proxy: {
             '^/prepareblob': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/createcopy': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/getcolortheme': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/getbackgrounddescription': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/generatebackgrounds': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/removebackgroundandcrop': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             },
             '^/combineimages': {
-                target: 'https://localhost:44329/',
+                target: 'https://localhost:5443/',
                 secure: false
             }
         },
