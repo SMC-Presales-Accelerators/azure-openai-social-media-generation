@@ -22,6 +22,7 @@ const uploadFileToBlob = async (file) => {
         const compressedFile = await imageCompression(file, options);
         const response = await fetch('prepareblob?filename=' + encodeURIComponent(file.name));
         const data = await response.json();
+        console.log(data)
 
         // get BlobService = notice `?` is pulled out of sasToken - if created in Azure portal
         const blob = new BlockBlobClient(
