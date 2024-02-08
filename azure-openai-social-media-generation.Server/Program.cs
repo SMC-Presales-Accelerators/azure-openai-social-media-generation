@@ -81,45 +81,6 @@ app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService
 {
     List<string> response = await imagePrepService.GetColorThemeAsync(image.ForegroundImageUri);
 
-    string? deploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_CHATGPT_DEPLOYMENT");
-    if (deploymentName == null)
-    {
-        throw new InvalidOperationException("OpenAI Endpoint not configured");
-    }
-    string instructionsPrompt = @"You are an AI assistant that provides english color names based on hex color codes. Provide the color name as a JSON response with the proper ColorName.";
-
-    string prompt = $"Hex Color: {response[response.Count - 1]}";
-    var PromptMessages = new List<ChatMessage>
-    {
-        new ChatMessage(ChatRole.System, instructionsPrompt),
-        new ChatMessage(ChatRole.User, prompt)
-    };
-    var ChatOptions = new ChatCompletionsOptions(messages: PromptMessages, deploymentName: deploymentName)
-    {
-        Temperature = (float?)0.7
-    };
-    ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
-
-    string accentColor = "";
-
-    try
-    {
-        JsonNode? json = JsonNode.Parse(completions.Choices[0].Message.Content);
-        if (json != null && json["ColorName"] != null)
-        {
-#pragma warning disable CS8602 // Dereference of a possibly null reference. Can't be null because of if statement
-            accentColor = json["ColorName"].ToString();
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
-        }
-        
-    }
-    catch
-    {
-        accentColor = "None";
-    }
-
-    response[response.Count - 1] = accentColor;
-
     return new { DominantColors = string.Join(", ", response.ToArray()) };
 })
 .WithName("GetColorTheme")
@@ -133,7 +94,7 @@ app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndColors copyandc
         throw new InvalidOperationException("OpenAI Endpoint not configured");
     }
     string instructionsPrompt = @"You are an AI Assistant that creates short, simple image descriptions for AI image generation. 
-You will be provided a list of colors, provide the description of a simple background using complementary colors. Provide no explanation as to why choices were made.";
+You will be provided a list of colors, provide the description of a background for marketing purposes using complementary colors. Provide no explanation as to why choices were made.";
 //You will be provided marketing copy and a list of colors. Your job is to provide a description of a gradient background 
 //that uses complementary colors and fits the emotion of the copy to be used for diffusion based generation. Provide only the description of the background.";
 

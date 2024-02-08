@@ -7,6 +7,7 @@ using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Numerics;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -22,6 +23,8 @@ namespace azure_openai_social_media_generation.Server
     {
         private HttpClient _httpClient;
         private BlobServiceClient _blob;
+
+        private ColorList colorvectors = new ColorList();
 
         private static readonly ImageAnalysisOptions cropOptions = new ImageAnalysisOptions()
         {
@@ -68,31 +71,38 @@ namespace azure_openai_social_media_generation.Server
 
         public async Task<List<string>> GetColorThemeAsync(Uri uri)
         {
-            // Here we are using the v3.1 endpoint for the Computer Vision API instead of 4.0 because the 4.0 endpoint does not support color analysis
-            // We are manually calling it to get color analysis, as the SDK drops the color analysis from the response
-            string ColorAnalysisEndpoint = $"{_VisionServiceEndpoint}/vision/v3.1/analyze?visualFeatures=Color";
-            var httpRequestMessage = new HttpRequestMessage
-            {
-                Method = HttpMethod.Post,
-                RequestUri = new Uri(ColorAnalysisEndpoint),
-                Headers = {
-                    { "Ocp-Apim-Subscription-Key", _VisionServiceKey }
-                },
-                Content = new StringContent(JsonConvert.SerializeObject(new {url = uri}), Encoding.UTF8, "application/json")
-            };
+            HttpResponseMessage responseForeground = await _httpClient.GetAsync(uri);
+            using Stream foregroundStream = await responseForeground.Content.ReadAsStreamAsync();
 
-            HttpResponseMessage responseColor = await _httpClient.SendAsync(httpRequestMessage);
+            using SixLabors.ImageSharp.Image<Rgba32> foregroundImageSharp = await SixLabors.ImageSharp.Image.LoadAsync<Rgba32>(foregroundStream);
+            foregroundImageSharp.Mutate(x => x.Resize(100, 100));
+            Rgba32 transparent = SixLabors.ImageSharp.Color.Transparent;
+            List<Vector3> colors = new List<Vector3>();
 
-            string color_response = await responseColor.Content.ReadAsStringAsync();
-            AzureColorResponse color = JsonConvert.DeserializeObject<AzureColorResponse>(color_response);
-            if(color == null || color!.color == null || color!.color!.dominantColors == null || color!.color!.accentColor == null)
+            foregroundImageSharp.ProcessPixelRows(accessor =>
             {
-                throw new ApplicationException("Unable to analyze image");
-            }
-            List<string> colors = color!.color!.dominantColors.ToList();
-            colors.Add(color!.color!.accentColor);
-            return colors;
-            
+                for (int y = 0; y < accessor.Height; y++)
+                {
+                    Span<Rgba32> pixelRow = accessor.GetRowSpan(y);
+                    for (int x = 0; x < pixelRow.Length; x++)
+                    {
+                        // Get a reference to the pixel at position x
+                        ref Rgba32 pixel = ref pixelRow[x];
+                        string hex = pixel.ToHex();
+                        int hexVal = Convert.ToInt32(hex.Remove(hex.Length - 2), 16);
+                        if(pixel != transparent)
+                        {
+                            colors.Add(new Vector3(pixel.R, pixel.G, pixel.B));
+                        }
+                    }
+                }
+            });
+
+            IDictionary<string, int> colorCounts = await colorvectors.ColorCounts(colors);
+
+            var colorList = (from entry in colorCounts orderby entry.Value descending select entry.Key).Take(3).ToList();
+            return colorList;
+
         }
 
         public async Task<Uri> CropAndRemoveBackgroundAsync(Uri foregroundImage)
