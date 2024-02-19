@@ -69,11 +69,11 @@ app.UseHttpsRedirection();
 #pragma warning disable CS8604 //  Can't be null because of instantiation above
 Uri dalleUri = new Uri(app.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_ENDPOINT"));
 IPHostEntry DalleEndpointCname = await Dns.GetHostEntryAsync(dalleUri.Host);
-// Currently Dalle is only available in East US, verify we are in eastus 
+// Currently Dalle3 is only available in Sweden Central, verify we are in swedencentral 
 // by checking the second part of the hostname which will designate the region
-if (DalleEndpointCname.HostName.Split(".")[1] != "eastus")
+if (DalleEndpointCname.HostName.Split(".")[1] != "swedencentral")
 {
-    throw new InvalidOperationException("OpenAI DALL-E Endpoint must be in East US");
+    throw new InvalidOperationException("OpenAI DALL-E 3 Endpoint must be in Sweden Central");
 }
 #pragma warning restore CS8604 // Possible null reference argument
 
@@ -86,28 +86,32 @@ app.MapPost($"{basePath}getcolortheme", async (ImageUri image, IImagePrepService
 .WithName("GetColorTheme")
 .WithOpenApi();
 
-app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndColors copyandcolors, OpenAIClient openai) =>
+app.MapPost($"{basePath}getbackgrounddescription", async (CopyAndImage copyAndImage, OpenAIClient openai) =>
 {
     string? deploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_CHATGPT_DEPLOYMENT");
     if (deploymentName == null)
     {
         throw new InvalidOperationException("OpenAI Endpoint not configured");
     }
-    string instructionsPrompt = @"You are an AI Assistant that creates short, simple image descriptions for AI image generation. 
-You will be provided a list of colors, provide the description of a background for marketing purposes using complementary colors. Provide no explanation as to why choices were made.";
-//You will be provided marketing copy and a list of colors. Your job is to provide a description of a gradient background 
-//that uses complementary colors and fits the emotion of the copy to be used for diffusion based generation. Provide only the description of the background.";
+    string instructionsPrompt = @"You are an AI Assistant that creates descriptions of backgrounds to be used for social media marketing. You will be provided an image and marketing copy.
+Provide a detailed background description that will best catch the eye of a consumer on social media. This description will be used for image generation. Use the colors of the image provided
+to add colors to the background description that will make the subject really pop.";
 
-    string prompt = "Colors: " + copyandcolors.Colors;
-    var PromptMessages = new List<ChatMessage>
+    string prompt = "Marketing Copy: " + copyAndImage.Copy;
+    var PromptMessages = new List<ChatRequestMessage>
     {
-        new ChatMessage(ChatRole.System, instructionsPrompt),
-        new ChatMessage(ChatRole.User, prompt)
+        new ChatRequestSystemMessage(instructionsPrompt),
+        new ChatRequestUserMessage(new List<ChatMessageContentItem>
+        {
+            new ChatMessageTextContentItem(prompt),
+            new ChatMessageImageContentItem(copyAndImage.ImageUrl)
+        })
     };
     var ChatOptions = new ChatCompletionsOptions(messages: PromptMessages, deploymentName: deploymentName)
     {
         Temperature = (float?)0.4
     };
+    ChatOptions.MaxTokens = 1500;
     ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
    
     return new { Description = completions.Choices[0].Message.Content };
@@ -120,12 +124,23 @@ app.MapPost($"{basePath}generatebackgrounds", async (BackgroundDescription descr
     var _openai = openAiClientFactory.CreateClient("OpenAiDalle");
    var ImageGenOptions = new ImageGenerationOptions()
     {
-        ImageCount = 4,
-        Prompt = "Simple image background: " + description.Description
+       DeploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_DEPLOYMENT"),
+        ImageCount = 1,
+        Prompt = description.Description,
+        Size = ImageSize.Size1024x1024
     };
     ImageGenerations images = await _openai.GetImageGenerationsAsync(ImageGenOptions);
 
     List<Uri> imageUrls = images.Data.Select(image => image.Url).ToList();
+
+    images = await _openai.GetImageGenerationsAsync(ImageGenOptions);
+
+    imageUrls.AddRange(images.Data.Select(image => image.Url).ToList());
+
+    images = await _openai.GetImageGenerationsAsync(ImageGenOptions);
+
+    imageUrls.AddRange(images.Data.Select(image => image.Url).ToList());
+
     return new { BackgroundUrls = imageUrls };
 })
 .WithName("GenerateBackgrounds")
@@ -175,15 +190,16 @@ app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient ope
             break;
     }
     string instructionsPrompt = $"You are an AI Assistant that creates an {PostTypeText}. You will be provided marketing copy and your job is to create the text for an {PostTypeText} including hashtags.";
-    var PromptMessages = new List<ChatMessage>
+    var PromptMessages = new List<ChatRequestMessage>
     {
-        new ChatMessage(ChatRole.System, instructionsPrompt),
-        new ChatMessage(ChatRole.User, info.Copy)
+        new ChatRequestSystemMessage(instructionsPrompt),
+        new ChatRequestUserMessage(info.Copy)
     };
     var ChatOptions = new ChatCompletionsOptions(messages: PromptMessages, deploymentName: deploymentName)
     {
         Temperature = (float?)0.7
     };
+    ChatOptions.MaxTokens = 1500;
     ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
     return new { Copy = completions.Choices[0].Message.Content };
 
@@ -238,7 +254,7 @@ internal record MarketingInfo(string Copy, string PostType);
 
 internal record ImageUri(Uri ForegroundImageUri);
 
-internal record CopyAndColors(string Copy, string Colors);
+internal record CopyAndImage(string Copy, Uri ImageUrl);
 
 internal record BackgroundDescription(string Description);
 

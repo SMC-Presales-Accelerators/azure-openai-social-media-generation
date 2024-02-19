@@ -24,17 +24,13 @@ const SocialMediaCreator = () => {
     const [readyToDisplay, setReadyToDisplay] = useState(false);
 
     async function CreateBackgroundImage(marketCopy, uploadedImage) {
-        return getDominantColors(uploadedImage)
-            .then(function (data) {
-                setDominantColors(data.dominantColors);
-                return getBackgroundDescription(marketCopy, data.dominantColors)
-                    .then(function (bdata) {
-                        setBackgroundDescription(bdata.description);
-                        return generateBackgrounds(bdata.description)
-                        //.then(function (bgdata) {
-                        //    setBackgrounds(bgdata.backgroundUrls);
-                        //});
-                    });
+        return getBackgroundDescription(marketCopy, uploadedImage)
+            .then(function (bdata) {
+                setBackgroundDescription(bdata.description);
+                return generateBackgrounds(bdata.description)
+                //.then(function (bgdata) {
+                //    setBackgrounds(bgdata.backgroundUrls);
+                //});
             });
     }
 
@@ -99,7 +95,7 @@ const SocialMediaCreator = () => {
                         <option value="instagram">Instagram</option>
                         <option value="facebook">Facebook</option>
                         <option value="twitter">X (formerly Twitter)</option>
-                        <option value="linkedin">LinkedIn</option>
+                        <option value="linkedin">LinkedIn</option>  
                     </Form.Select>
                 </Form.Group>
 
@@ -119,8 +115,6 @@ const SocialMediaCreator = () => {
             </Form>
             {foregroundImage != "" && <Container><Row><h4>Foreground image with background removed</h4></Row><Row><Col xs={4}><Image src={foregroundImage} thumbnail /></Col></Row></Container>}
 
-            {dominantColors != "" &&
-                <Container><Row><h4>Uploaded Image Color Theme</h4></Row><Row><p>{dominantColors}</p></Row></Container>}
             {backgroundDescription != "" &&
                 <Container><Row><h4>Provided Background Description used for Generation</h4></Row><Row><p>{backgroundDescription}</p></Row></Container>}
             {(backgrounds != undefined && backgrounds.length > 0) &&
