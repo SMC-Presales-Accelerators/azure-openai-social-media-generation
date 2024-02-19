@@ -99,10 +99,10 @@ You will be provided a list of colors, provide the description of a background f
 //that uses complementary colors and fits the emotion of the copy to be used for diffusion based generation. Provide only the description of the background.";
 
     string prompt = "Colors: " + copyandcolors.Colors;
-    var PromptMessages = new List<ChatMessage>
+    var PromptMessages = new List<ChatRequestMessage>
     {
-        new ChatMessage(ChatRole.System, instructionsPrompt),
-        new ChatMessage(ChatRole.User, prompt)
+        new ChatRequestSystemMessage(instructionsPrompt),
+        new ChatRequestUserMessage(prompt)
     };
     var ChatOptions = new ChatCompletionsOptions(messages: PromptMessages, deploymentName: deploymentName)
     {
@@ -175,10 +175,10 @@ app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient ope
             break;
     }
     string instructionsPrompt = $"You are an AI Assistant that creates an {PostTypeText}. You will be provided marketing copy and your job is to create the text for an {PostTypeText} including hashtags.";
-    var PromptMessages = new List<ChatMessage>
+    var PromptMessages = new List<ChatRequestMessage>
     {
-        new ChatMessage(ChatRole.System, instructionsPrompt),
-        new ChatMessage(ChatRole.User, info.Copy)
+        new ChatRequestSystemMessage(instructionsPrompt),
+        new ChatRequestUserMessage(info.Copy)
     };
     var ChatOptions = new ChatCompletionsOptions(messages: PromptMessages, deploymentName: deploymentName)
     {
