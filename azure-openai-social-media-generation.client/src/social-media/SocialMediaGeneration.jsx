@@ -29,8 +29,8 @@ export const getDominantColors = async (imageUri) => {
     return response.json();
 }
 
-export const getBackgroundDescription = async (copy, colors) => {
-    if (!copy || !colors) return [];
+export const getBackgroundDescription = async (copy, imageUri) => {
+    if (!copy || !imageUri) return [];
 
     const response = await fetch('getbackgrounddescription', {
         method: "POST",
@@ -39,7 +39,7 @@ export const getBackgroundDescription = async (copy, colors) => {
         },
         body: JSON.stringify({
             Copy: copy,
-            Colors: colors
+            ImageUrl: imageUri
         })
     });
     return response.json();

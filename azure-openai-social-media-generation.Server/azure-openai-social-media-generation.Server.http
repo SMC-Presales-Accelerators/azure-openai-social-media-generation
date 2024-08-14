@@ -1,0 +1,6 @@
+@azure_openai_social_media_generation.Server_HostAddress = http://localhost:5227
+
+GET {{azure_openai_social_media_generation.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
