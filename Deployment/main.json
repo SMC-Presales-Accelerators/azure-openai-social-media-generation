@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.25.3.34343",
-      "templateHash": "12242992564029678148"
+      "version": "0.26.170.59819",
+      "templateHash": "9534588959127433890"
     }
   },
   "parameters": {
@@ -251,7 +251,7 @@
       "properties": {
         "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('app_service_plan_name'))]",
         "siteConfig": {
-          "linuxFxVersion": "DOCKER|docker.io/smcpresalesaccelerators/azure-openai-social-media-generation:latest"
+          "linuxFxVersion": "DOCKER|smcpresalesaccelerators/azure-openai-social-media-generation:latest"
         }
       },
       "dependsOn": [
