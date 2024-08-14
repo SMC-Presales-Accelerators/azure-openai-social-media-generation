@@ -2,7 +2,7 @@
 using SixLabors.ImageSharp.Processing;
 using Azure;
 using Azure.AI.Vision.ImageAnalysis;
-using Azure.AI.Vision.Common;
+
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
@@ -28,17 +28,16 @@ namespace azure_openai_social_media_generation.Server
 
         private static readonly ImageAnalysisOptions cropOptions = new ImageAnalysisOptions()
         {
-            Features = ImageAnalysisFeature.CropSuggestions,
-            CroppingAspectRatios = new List<double> { 1.0 }
+            SmartCropsAspectRatios = new float[] { 1.0F }
         };
-        private static readonly ImageAnalysisOptions backgroundRemoveOptions = new ImageAnalysisOptions()
+        /* private static readonly ImageAnalysisOptions backgroundRemoveOptions = new ImageAnalysisOptions()
         {
             SegmentationMode = ImageSegmentationMode.BackgroundRemoval
-        };
+        }; */
 
         private string _blobContainer;
 
-        private VisionServiceOptions serviceOptions;
+        private ImageAnalysisClient imageAnalysisClient;
 
         private string _VisionServiceEndpoint;
         private string _VisionServiceKey;
@@ -51,15 +50,16 @@ namespace azure_openai_social_media_generation.Server
             {
                 throw new ArgumentNullException("Vision Service not configured");
             }
+
+            imageAnalysisClient = new ImageAnalysisClient(new Uri(endpoint), new AzureKeyCredential(key));
+
             string? uploadContainer = configuration.GetValue<String>("AZURE_BLOB_UPLOAD_CONTAINER");
             if (uploadContainer == null)
             {
                 throw new ArgumentNullException("Blob Container not configured");
             }
             _blobContainer = uploadContainer;
-            serviceOptions = new VisionServiceOptions(
-            endpoint, 
-            new AzureKeyCredential(key));
+
             _httpClient = httpClient;
             _blob = blob;
 
@@ -117,17 +117,16 @@ namespace azure_openai_social_media_generation.Server
 
             using MemoryStream foregroundMemoryStream = new MemoryStream();
             await foregroundImageSharp.SaveAsPngAsync(foregroundMemoryStream);
-            using var foregroundSourceBuffer = new ImageSourceBuffer();
-            foregroundSourceBuffer.GetWriter().Write(foregroundMemoryStream.ToArray());
-            var foregroundVisionSource = VisionSource.FromImageSourceBuffer(foregroundSourceBuffer);
+            foregroundMemoryStream.Position = 0;
 
-            using var cropAnalyzer = new ImageAnalyzer(serviceOptions, foregroundVisionSource, cropOptions);
+            BinaryData foregroundSourceBuffer = await BinaryData.FromStreamAsync(foregroundMemoryStream);
+            VisualFeatures cropVisualFeatures = VisualFeatures.SmartCrops;
 
-            var cropResult = cropAnalyzer.Analyze();
-
-            if (cropResult.Reason == ImageAnalysisResultReason.Analyzed)
+            try
             {
-                var box = cropResult.CropSuggestions[0].BoundingBox;
+                ImageAnalysisResult imageAnalysisResult = await imageAnalysisClient.AnalyzeAsync(foregroundSourceBuffer, visualFeatures: cropVisualFeatures, options: cropOptions);
+
+                var box = imageAnalysisResult.SmartCrops.Values[0].BoundingBox;
                 Rectangle cropRect = new Rectangle(box.X, box.Y, box.Width, box.Height);
 
                 foregroundImageSharp.Mutate(x => x.Crop(cropRect));
@@ -135,35 +134,47 @@ namespace azure_openai_social_media_generation.Server
 
                 using MemoryStream croppedForegroundMemoryStream = new MemoryStream();
                 await foregroundImageSharp.SaveAsPngAsync(croppedForegroundMemoryStream);
+                croppedForegroundMemoryStream.Position = 0;
 
-                using var croppedForegroundSourceBuffer = new ImageSourceBuffer();
-                croppedForegroundSourceBuffer.GetWriter().Write(croppedForegroundMemoryStream.ToArray());
-                var croppedForegroundVisionSource = VisionSource.FromImageSourceBuffer(croppedForegroundSourceBuffer);
+                var croppedContent = new StreamContent(croppedForegroundMemoryStream);
+                croppedContent.Headers.Add("Content-Type", "application/octet-stream");
 
-                using var backgroundRemoveAnalyzer = new ImageAnalyzer(serviceOptions, croppedForegroundVisionSource, backgroundRemoveOptions);
+                var backgroundRemovalRequest = new HttpRequestMessage(HttpMethod.Post, $"{_VisionServiceEndpoint}/computervision/imageanalysis:segment?api-version=2023-02-01-preview&mode=backgroundRemoval");
+                backgroundRemovalRequest.Content = croppedContent;
+                backgroundRemovalRequest.Headers.Add("Ocp-Apim-Subscription-Key", _VisionServiceKey);
 
-                var backgroundRemovalResult = backgroundRemoveAnalyzer.Analyze();
-                if (backgroundRemovalResult.Reason == ImageAnalysisResultReason.Analyzed)
+                var backgroundRemovedResponse = await _httpClient.SendAsync(backgroundRemovalRequest);
+                backgroundRemovedResponse.EnsureSuccessStatusCode();
+
+                using SixLabors.ImageSharp.Image backgroundRemovedImage = SixLabors.ImageSharp.Image.Load(await backgroundRemovedResponse.Content.ReadAsStreamAsync());
+                using MemoryStream backgroundRemovedMemoryStream = new MemoryStream();
+                await backgroundRemovedImage.SaveAsPngAsync(backgroundRemovedMemoryStream);
+                return await UploadToBlobStorageAsync(backgroundRemovedMemoryStream);
+
+            }
+            catch (RequestFailedException e)
+            {
+                if (e.Status != 200)
                 {
-                    using var segmentationResult = backgroundRemovalResult.SegmentationResult;
-
-                    var transparentForegroundImageBuffer = segmentationResult.ImageBuffer;
-
-                    using SixLabors.ImageSharp.Image backgroundRemovedImage = SixLabors.ImageSharp.Image.Load(transparentForegroundImageBuffer.ToArray());
-                    using MemoryStream backgroundRemovedMemoryStream = new MemoryStream();
-                    await backgroundRemovedImage.SaveAsPngAsync(backgroundRemovedMemoryStream);
-                    return await UploadToBlobStorageAsync(backgroundRemovedMemoryStream);
+                    Console.WriteLine("Error analyzing image.");
+                    Console.WriteLine($"HTTP status code {e.Status}: {e.Message}");
+                    throw;
                 }
                 else
                 {
-                    var errorDetails = ImageAnalysisErrorDetails.FromResult(backgroundRemovalResult);
-                    throw new ApplicationException(errorDetails.Message);
+                    throw;
                 }
             }
-            else
+            catch (HttpRequestException e)
             {
-                var errorDetails = ImageAnalysisErrorDetails.FromResult(cropResult);
-                throw new ApplicationException(errorDetails.Message);
+                Console.WriteLine("Error Removing Background.");
+                Console.WriteLine($"HTTP status code {e.Message}");
+                throw;
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                throw;
             }
         }
 
@@ -272,74 +283,6 @@ namespace azure_openai_social_media_generation.Server
             }
 
             return combinedImages;
-        }
-
-        public async Task<Uri> CreateImageAsync(Uri foregroundImage, Uri backgroundImage)
-        {
-            if (foregroundImage == null || backgroundImage == null)
-                throw new ArgumentNullException("Pass both a background and foreground image url");
-
-            HttpResponseMessage responseBackground = await _httpClient.GetAsync(backgroundImage);
-            Stream backgroundStream = await responseBackground.Content.ReadAsStreamAsync();
-            HttpResponseMessage responseForeground = await _httpClient.GetAsync(foregroundImage);
-            Stream foregroundStream = await responseForeground.Content.ReadAsStreamAsync();
-
-            SixLabors.ImageSharp.Image foregroundImageSharp = await SixLabors.ImageSharp.Image.LoadAsync(foregroundStream);
-            SixLabors.ImageSharp.Image backgroundImageSharp = await SixLabors.ImageSharp.Image.LoadAsync(backgroundStream);
-
-            using MemoryStream foregroundMemoryStream = new MemoryStream();
-            await foregroundImageSharp.SaveAsPngAsync(foregroundMemoryStream);
-            using var foregroundSourceBuffer = new ImageSourceBuffer();
-            foregroundSourceBuffer.GetWriter().Write(foregroundMemoryStream.ToArray());
-            var foregroundVisionSource = VisionSource.FromImageSourceBuffer(foregroundSourceBuffer);
-
-            using var cropAnalyzer = new ImageAnalyzer(serviceOptions, foregroundVisionSource, cropOptions);
-
-            var cropResult = cropAnalyzer.Analyze();
-
-            if (cropResult.Reason == ImageAnalysisResultReason.Analyzed)
-            {
-                var box = cropResult.CropSuggestions[0].BoundingBox;
-                Rectangle cropRect = new Rectangle(box.X, box.Y, box.Width, box.Height);
-
-                foregroundImageSharp.Mutate(x => x.Crop(cropRect));
-                foregroundImageSharp.Mutate(x => x.Resize(1024, 1024));
-
-                using MemoryStream croppedForegroundMemoryStream = new MemoryStream();
-                await foregroundImageSharp.SaveAsPngAsync(croppedForegroundMemoryStream);
-
-                using var croppedForegroundSourceBuffer = new ImageSourceBuffer();
-                croppedForegroundSourceBuffer.GetWriter().Write(croppedForegroundMemoryStream.ToArray());
-                var croppedForegroundVisionSource = VisionSource.FromImageSourceBuffer(croppedForegroundSourceBuffer);
-
-                using var backgroundRemoveAnalyzer = new ImageAnalyzer(serviceOptions, croppedForegroundVisionSource, backgroundRemoveOptions);
-
-                var backgroundRemovalResult = backgroundRemoveAnalyzer.Analyze();
-                if (backgroundRemovalResult.Reason == ImageAnalysisResultReason.Analyzed)
-                {
-                    using var segmentationResult = backgroundRemovalResult.SegmentationResult;
-
-                    var transparentForegroundImageBuffer = segmentationResult.ImageBuffer;
-
-                    SixLabors.ImageSharp.Image backgroundRemovedImage = SixLabors.ImageSharp.Image.Load(transparentForegroundImageBuffer.ToArray());
-                    backgroundImageSharp.Mutate(x => x.DrawImage(backgroundRemovedImage, 1));
-
-                    using MemoryStream finalImageMemoryStream = new MemoryStream();
-                    await backgroundImageSharp.SaveAsPngAsync(finalImageMemoryStream);
-                    return await UploadToBlobStorageAsync(finalImageMemoryStream);
-                }
-                else
-                {
-                    var errorDetails = ImageAnalysisErrorDetails.FromResult(backgroundRemovalResult);
-                    throw new ApplicationException(errorDetails.Message);
-                }
-            }
-            else
-            {
-                var errorDetails = ImageAnalysisErrorDetails.FromResult(cropResult);
-                throw new ApplicationException(errorDetails.Message);
-            }
-            
         }
 
         private async Task<Uri> UploadToBlobStorageAsync(Stream stream)

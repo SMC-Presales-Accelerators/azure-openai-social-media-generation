@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import FileUpload from '../azure-storage/fileUpload';
-import { generateSocialMediaPost, getDominantColors, getBackgroundDescription, generateBackgrounds, removeBackgroundAndCrop, combineImages } from './SocialMediaGeneration';
+import { generateSocialMediaPost, getBackgroundDescription, generateBackgrounds, removeBackgroundAndCrop, combineImages } from './SocialMediaGeneration';
 import GeneratedSocialMediaPost from './GeneratedSocialMediaPost';
 import Button from 'react-bootstrap/Button';
 import Form from 'react-bootstrap/Form';
@@ -15,7 +15,6 @@ const SocialMediaCreator = () => {
     const [uploadedImage, setUploadedImage] = useState("");
     const [submitReady, setSubmitReady] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [dominantColors, setDominantColors] = useState("");
     const [backgroundDescription, setBackgroundDescription] = useState("");
     const [backgrounds, setBackgrounds] = useState([]);
     const [foregroundImage, setForegroundImage] = useState("")
