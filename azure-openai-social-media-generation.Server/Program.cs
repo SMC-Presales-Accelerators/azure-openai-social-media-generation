@@ -11,6 +11,7 @@ using Azure.Storage.Sas;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using System.Net;
+using Azure.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,7 +41,16 @@ builder.Services.AddAzureClients(clientBuilder =>
     clientBuilder.AddOpenAIClient(new Uri(openaiEndpoint), new Azure.AzureKeyCredential(openaiKey));
     clientBuilder.AddOpenAIClient(new Uri(openaiDalleEndpoint), new Azure.AzureKeyCredential(openaiDalleKey)).WithName("OpenAiDalle");
 
-    clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_CONNECTION_STRING"));
+    string? blobConnString = builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_CONNECTION_STRING");
+    if (blobConnString == null)
+    {
+        clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_URL"));
+    }
+    else
+    {
+        clientBuilder.AddBlobServiceClient(blobConnString);
+    }
+    clientBuilder.UseCredential(new DefaultAzureCredential());
 });
 builder.Services.AddHttpClient<IImagePrepService, ImagePrepService>();
 
@@ -113,7 +123,7 @@ to add colors to the background description that will make the subject really po
     };
     ChatOptions.MaxTokens = 1500;
     ChatCompletions completions = await openai.GetChatCompletionsAsync(ChatOptions);
-   
+
     return new { Description = completions.Choices[0].Message.Content };
 })
 .WithName("GetBackgroundDescription")
@@ -122,9 +132,9 @@ to add colors to the background description that will make the subject really po
 app.MapPost($"{basePath}generatebackgrounds", async (BackgroundDescription description, IAzureClientFactory<OpenAIClient> openAiClientFactory) =>
 {
     var _openai = openAiClientFactory.CreateClient("OpenAiDalle");
-   var ImageGenOptions = new ImageGenerationOptions()
+    var ImageGenOptions = new ImageGenerationOptions()
     {
-       DeploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_DEPLOYMENT"),
+        DeploymentName = app.Configuration.GetValue<String>("AZURE_OPENAI_DALLE_DEPLOYMENT"),
         ImageCount = 1,
         Prompt = description.Description,
         Size = ImageSize.Size1024x1024
@@ -171,7 +181,7 @@ app.MapPost($"{basePath}createcopy", async (MarketingInfo info, OpenAIClient ope
     }
 
     string PostTypeText = "";
-    switch(info.PostType)
+    switch (info.PostType)
     {
         case "instagram":
             PostTypeText = "Instagram post";
@@ -239,8 +249,8 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
         }
     }
     else
-    { 
-        throw new InvalidOperationException("Server not configured"); 
+    {
+        throw new InvalidOperationException("Server not configured");
     }
 })
 .WithName("PrepareBlob")
