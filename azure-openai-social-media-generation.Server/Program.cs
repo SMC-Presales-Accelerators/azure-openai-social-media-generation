@@ -250,6 +250,27 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
             sasBuilder.SetPermissions(BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create);
 
             return new { SasUri = blobClient.GenerateSasUri(sasBuilder) };
+        } else if(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_URL") != null)
+        {
+            var userDelegationKey = blob.GetUserDelegationKey(DateTimeOffset.UtcNow.AddDays(-1),
+                                                                DateTimeOffset.UtcNow.AddDays(2));
+            var sasBuilder = new BlobSasBuilder()
+            {
+                BlobContainerName = blobClient.BlobContainerName,
+                BlobName = blobClient.Name,
+                Resource = "b", // b for blob, c for container
+                StartsOn = DateTimeOffset.UtcNow.AddDays(-1),
+                ExpiresOn = DateTimeOffset.UtcNow.AddDays(2),
+            };
+
+            sasBuilder.SetPermissions(BlobSasPermissions.Read); // read permissions
+                                                                // Add the SAS token to the container URI.
+            var blobUriBuilder = new BlobUriBuilder(blobClient.Uri)
+            {
+                Sas = sasBuilder.ToSasQueryParameters(userDelegationKey, blob.AccountName)
+            };
+
+            return new { SasUri = blobUriBuilder.ToUri().ToString() };
         }
         else
         {
