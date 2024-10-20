@@ -44,7 +44,15 @@ builder.Services.AddAzureClients(clientBuilder =>
     string? blobConnString = builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_CONNECTION_STRING");
     if (blobConnString == null)
     {
-        clientBuilder.AddBlobServiceClient(builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_URL"));
+        string? blobUrl = builder.Configuration.GetValue<String>("AZURE_BLOB_STORAGE_URL");
+        string blobUrlNotNull = "";
+        if (blobUrl == null) {
+            throw new InvalidOperationException("Blob Storage not configured");
+        } else
+        {
+            blobUrlNotNull = blobUrl;
+        }
+        clientBuilder.AddBlobServiceClient(new Uri(blobUrlNotNull));
     }
     else
     {
