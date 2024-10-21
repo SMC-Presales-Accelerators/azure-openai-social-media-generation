@@ -263,8 +263,8 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
                 ExpiresOn = DateTimeOffset.UtcNow.AddDays(2),
             };
 
-            sasBuilder.SetPermissions(BlobSasPermissions.Read); // read permissions
-                                                                // Add the SAS token to the container URI.
+            sasBuilder.SetPermissions(BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create);
+
             var blobUriBuilder = new BlobUriBuilder(blobClient.Uri)
             {
                 Sas = sasBuilder.ToSasQueryParameters(userDelegationKey, blob.AccountName)
