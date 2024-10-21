@@ -270,7 +270,7 @@ app.MapGet($"{basePath}prepareblob", (string filename, BlobServiceClient blob) =
                 Sas = sasBuilder.ToSasQueryParameters(userDelegationKey, blob.AccountName)
             };
 
-            return new { SasUri = blobUriBuilder.ToUri().ToString() };
+            return new { SasUri = blobUriBuilder.ToUri() };
         }
         else
         {
