@@ -10,6 +10,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using System.Numerics;
 using Newtonsoft.Json;
 using System.Text;
+using System.Reflection.Metadata;
 
 namespace azure_openai_social_media_generation.Server
 {
@@ -42,6 +43,8 @@ namespace azure_openai_social_media_generation.Server
         private string _VisionServiceEndpoint;
         private string _VisionServiceKey;
 
+        private string? _blobUrlForManagedId;
+
         public ImagePrepService(IConfiguration configuration, HttpClient httpClient, BlobServiceClient blob)
         {
             string? key = configuration.GetValue<string>("VISION_SERVICE_KEY");
@@ -58,10 +61,14 @@ namespace azure_openai_social_media_generation.Server
             {
                 throw new ArgumentNullException("Blob Container not configured");
             }
+
+
             _blobContainer = uploadContainer;
 
             _httpClient = httpClient;
             _blob = blob;
+
+            _blobUrlForManagedId = configuration.GetValue<String>("AZURE_BLOB_STORAGE_URL");
 
             _VisionServiceKey = key;
 
@@ -291,6 +298,7 @@ namespace azure_openai_social_media_generation.Server
             var blobClient = _blob.GetBlobContainerClient(_blobContainer).GetBlobClient(uniqueFileName);
             stream.Position = 0;
             await blobClient.UploadAsync(stream);
+
             // Check if BlobContainerClient object has been authorized with Shared Key
             if (blobClient.CanGenerateSasUri)
             {
@@ -302,10 +310,33 @@ namespace azure_openai_social_media_generation.Server
                     Resource = "b"
                 };
 
-                sasBuilder.ExpiresOn = DateTimeOffset.UtcNow.AddDays(1);
+                sasBuilder.ExpiresOn = DateTimeOffset.UtcNow.AddDays(2);
+                sasBuilder.StartsOn = DateTimeOffset.UtcNow.AddDays(-1);
                 sasBuilder.SetPermissions(BlobSasPermissions.Read);
 
                 return blobClient.GenerateSasUri(sasBuilder);
+            }
+            else if (_blobUrlForManagedId != null)
+            {
+                var userDelegationKey = _blob.GetUserDelegationKey(DateTimeOffset.UtcNow.AddDays(-1),
+                                                                    DateTimeOffset.UtcNow.AddDays(2));
+                var sasBuilder = new BlobSasBuilder()
+                {
+                    BlobContainerName = blobClient.BlobContainerName,
+                    BlobName = blobClient.Name,
+                    Resource = "b", // b for blob, c for container
+                    StartsOn = DateTimeOffset.UtcNow.AddDays(-1),
+                    ExpiresOn = DateTimeOffset.UtcNow.AddDays(2),
+                };
+
+                sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+                var blobUriBuilder = new BlobUriBuilder(blobClient.Uri)
+                {
+                    Sas = sasBuilder.ToSasQueryParameters(userDelegationKey, _blob.AccountName)
+                };
+
+                return blobUriBuilder.ToUri();
             }
             else
             {
